@@ -1,0 +1,318 @@
+import os
+import discord
+import discord.ext
+import random
+from keep_alive import keep_alive
+from discord.ext import commands,tasks
+import youtube_dl
+from dotenv import load_dotenv
+import asyncio
+from requests import get
+from os import listdir
+from os.path import isfile, join
+import pathlib
+import nacl
+import subprocess
+import sys
+from pytube import YouTube
+
+#variables to save
+quared = []
+isLoop = False
+
+
+
+
+
+
+
+#variables end
+
+#install needed packages
+
+def install(package):
+    subprocess.check_call([sys.executable, "-m", "pip", "install", package])
+
+#install('PyNaCl')
+
+
+def clearDirectory():
+  #our path
+  mypath = str(pathlib.Path().resolve())
+  #find all files we have
+  #allFiles = [f for f in listdir(mypath) if isfile(join(mypath, f))]
+  webFormats = (".webm", ".mp3", ".m4a", "mp4", ".opus", ".part")
+  webFiles = [f for f in listdir(mypath) if isfile(join(mypath, f)) and str(f).endswith(webFormats)]
+  for webFile in webFiles:
+    os.remove(webFile)
+  print("Directory is cleared")
+
+clearDirectory()
+
+load_dotenv()
+
+#download youtube audio
+youtube_dl.utils.bug_reports_message = lambda: ''
+
+ytdl_format_options = {
+    #'o': 'abdul kalam inspirational speech',
+    'format': 'bestaudio/best',
+    'restrictfilenames': True,
+    'noplaylist': True,
+    'nocheckcertificate': True,
+    'ignoreerrors': False,
+    'logtostderr': False,
+    'quiet': True,
+    'no_warnings': True,
+    'default_search': 'auto',
+    'source_address': '0.0.0.0'#, # bind to ipv4 since ipv6 addresses cause issues sometimes
+    #'postprocessors': [{
+    #    'key': 'FFmpegExtractAudio',
+    #    'preferredcodec': 'mp3',
+    #    'preferredquality': '64',
+    #}]
+}
+
+ffmpeg_options = {
+    'options': '-vn'
+}
+
+ytdl = youtube_dl.YoutubeDL(ytdl_format_options)
+
+class YTDLSource(discord.PCMVolumeTransformer):
+    def __init__(self, source, *, data, volume=0.5):
+        super().__init__(source, volume)
+        self.data = data
+        self.title = data.get('title')
+        self.url = ""
+
+    @classmethod
+    async def from_url(cls, url, *, loop=None, stream=False):
+        loop = loop or asyncio.get_event_loop()
+        try: get(url)
+        except: data = ytdl.extract_info(f"ytsearch:{url}", download=not stream)['entries'][0]
+        else: data = ytdl.extract_info(url, download=not stream)
+        #data = await loop.run_in_executor(None, lambda: ytdl.extract_info(url, download=not stream))
+
+        if 'entries' in data:
+            # take first item from a playlist
+            data = data['entries'][0]
+        filename = data['title']# if stream else ytdl.prepare_filename(data) i dont want this
+        print("get file")
+        #return filename
+        return data
+
+#end download
+
+
+client = discord.Client();
+
+bot = commands.Bot(command_prefix='!')
+
+@bot.command(name='loop', help='Leave voice channel.')
+async def loopChange(ctx):
+  await ctx.message.delete()
+  global isLoop
+  isLoop = not isLoop
+  await ctx.send('Loop is turned ' + ('on' if isLoop else 'off'))
+
+@bot.command(name='join', help='Join to voice channel.')
+async def join(ctx, *arg):
+  await ctx.message.delete()
+  channel = ctx.author.voice.channel
+
+  if len(arg) != 0:
+    serverName = arg[0]
+    if serverName != "":
+      
+      #voice_channel_list = []
+      #find all voice channels
+      #for server in bot.guilds:
+      #    for channel in server.channels:
+      #        if str(channel.type) == 'voice':
+      #            voice_channel_list.append(channel)
+      #find our channel
+      for server in bot.guilds:
+        for channelf in server.voice_channels:
+          if str(channelf.name) == serverName:
+            print(channelf)
+            channel = channelf
+
+  #check if we are already in this channel
+  if channel and ctx.voice_client and channel == ctx.voice_client.channel:
+    await ctx.channel.send("I'm already here")
+    return
+  #check if we connected to another channel
+  if ctx.voice_client != None:
+    await ctx.voice_client.disconnect()
+
+  #connect to user's channel
+  
+  await channel.connect()
+
+@bot.command(name='leave', help='Leave voice channel.')
+async def leave(ctx):
+  await ctx.message.delete()
+  await ctx.voice_client.disconnect()
+
+def onMusicEnd(ctx, url):
+  global isLoop
+  if isLoop:
+    play(ctx, url)
+
+#music commands
+@bot.command(name='play_song', help='To play song')
+async def play(ctx,url):
+  #await ctx.message.delete()
+  messageSended = await ctx.send('One sec')
+  if ctx.voice_client == None:
+    if ctx.author.voice != None:
+      channel = ctx.author.voice.channel
+      await channel.connect()
+    else:
+      await ctx.send('You are not in a voice channel')
+      return
+  FFMPEG_OPTS = {'before_options': '-reconnect 1 -reconnect_streamed 1 -reconnect_delay_max 5', 'options': '-vn'}
+  async with ctx.typing():
+    vidData = await YTDLSource.from_url(url, loop=bot.loop)
+    #filename = await YTDLSource.from_url(url, loop=bot.loop)
+    #ctx.voice_client.play(discord.FFmpegPCMAudio(executable="ffmpeg.exe", source=filename))
+    if not ctx.voice_client.is_playing():
+      #filename = ytdl.prepare_filename(vidData)
+      #filename = filename.split(".")[0] + '.mp3'
+      ctx.voice_client.play(discord.FFmpegPCMAudio(ytdl.prepare_filename(vidData)), after=lambda e: print('Player error: %s' % e) if e else (bot.loop.create_task(play(ctx, url)) if isLoop else print('Music is ended')))
+    
+    vidURL = 'https://www.youtube.com/watch?v=' + vidData['id']
+    vidDescription = vidData['description']
+    vidDescription = vidDescription[:100] + '..' if len(vidDescription) > 100 else vidDescription
+    vidTitle = vidData['title']
+    vidThumb = vidData['thumbnail']
+    vidAuthor = vidData['channel']
+    vidDuration = vidData['duration']
+    vidReleaseDate = vidData['upload_date']
+    vidReleaseDate = vidReleaseDate[4] + vidReleaseDate[5] + '.' + vidReleaseDate[6] + vidReleaseDate[7] + '.' + vidReleaseDate[0] + vidReleaseDate[1] + vidReleaseDate[2] + vidReleaseDate[3]
+
+    embed=discord.Embed(title=vidTitle, url=vidURL, description=vidDescription, color=0x6f3cd6)
+
+    # Add author, thumbnail, fields, and footer to the embed
+    embed.set_author(name=vidAuthor, url=f"https://www.youtube.com/results?search_query={vidAuthor}", icon_url="https://www.youtube.com/s/desktop/d40906f2/img/favicon_144x144.png")
+
+    #embed.set_thumbnail(url="https://i.imgur.com/axLm3p6.jpeg")
+    embed.set_thumbnail(url=vidThumb)
+
+    #embed.add_field(name="Field 1 Title", value="This is the value for field 1. This is NOT an inline field.", inline=False) 
+    embed.add_field(name="Video duration:", value=str(vidDuration) + ' seconds', inline=True)
+    embed.add_field(name="Release date:", value=vidReleaseDate, inline=True)
+
+    embed.add_field(name=f"Added in queue by: {ctx.author.display_name}", value=ctx.message.content, inline=False)
+
+    embed.set_footer(text="Thank you for choosing DiBot!")
+
+    #### Useful ctx variables ####
+    ## User's display name in the server
+    ctx.author.display_name
+    ## User's avatar URL
+    ctx.author.avatar_url
+
+    #await ctx.send(f'Video URL: {str(vidURL)}')
+    #await ctx.send('**Now playing:** {}'.format(vidData['title']))
+    await messageSended.delete()
+    await ctx.send(embed=embed)
+        
+
+
+
+@bot.command(name='pause', help='This command pauses the song')
+async def pause(ctx):
+    await ctx.message.delete()
+    if ctx.voice_client == None:
+      return
+    #voice_client = ctx.message.guild.voice_client
+    voice_client = ctx.voice_client
+    if voice_client.is_playing():
+        await voice_client.pause()
+    else:
+        await ctx.send("The bot is not playing anything at the moment.")
+    
+@bot.command(name='resume', help='Resumes the song')
+async def resume(ctx):
+    await ctx.message.delete()
+    if ctx.voice_client == None:
+      return
+    voice_client = ctx.voice_client
+    if voice_client.is_paused():
+        await voice_client.resume()
+    else:
+        await ctx.send("The bot was not playing anything before this. Use play_song command")
+
+@bot.command(name='stop', help='Stops the song')
+async def stop(ctx):
+    await ctx.message.delete()
+    if ctx.voice_client == None:
+      return
+    voice_client = ctx.voice_client
+    if voice_client.is_playing():
+        await voice_client.stop()
+    else:
+        await ctx.send("The bot is not playing anything at the moment.")
+
+
+
+
+
+
+badWords = ["fuck", "fucking", "fucked", "shit", "gay"]
+
+preventWords = [
+  "Stop using words like this",
+  "Don't use words like that"
+]
+
+
+
+@bot.event
+async def on_ready():
+  print('Bot logged in as {0.user}'.format(bot))
+
+
+@bot.event
+async def on_message(message):
+  
+  if message.author == client.user:
+    return
+
+  msg = message.content
+
+  if msg == '!bot info':
+    await message.delete()
+    embed=discord.Embed(title='DiBot', url='https://odemtut.github.io', description='Bot created by Odem', color=0x6f3cd6)
+
+    # Add author, thumbnail, fields, and footer to the embed
+    embed.set_author(name='Odem', url='https://odemtut.github.io', icon_url="https://yt3.ggpht.com/ytc/AKedOLSkSeYPw5tzMFAAaQ_8uVR2noyEzCQb4uWmlXp3sw=s88-c-k-c0x00ffffff-no-rj")
+
+    #embed.set_thumbnail(url="https://i.imgur.com/axLm3p6.jpeg")
+    embed.set_thumbnail(url=bot.user.avatar_url)
+
+    #embed.add_field(name="Field 1 Title", value="This is the value for field 1. This is NOT an inline field.", inline=False) 
+    embed.add_field(name="Bot version:", value='0.4 (beta)', inline=True)
+    embed.add_field(name="Last update:", value='29.09.2021', inline=True)
+
+    embed.set_footer(text="Thank you for choosing DiBot!")
+    await message.channel.send(embed=embed)
+
+  if msg.startswith('!hello'):
+    await message.channel.send('Hello!')
+
+  if any(word in msg.lower() for word in badWords):
+    await message.channel.send(random.choice(preventWords))
+
+  await bot.process_commands(message)
+
+
+
+
+
+
+
+keep_alive()
+bot.run(os.environ['TOKEN'])
