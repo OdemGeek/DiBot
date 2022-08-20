@@ -47,7 +47,8 @@ userTimeoutTime = 1  #in minutes
 
 
 #bot doing
-async def warningBot(member: discord.Member, channel, cause):
+async def warningBot(member: discord.Member, channel, cause, warn=False):
+    print("testing")
     embed = discord.Embed(
         color=0xff9900,
         title=f'Warning {dataManager.getViolation(member)}/{warningLimit}'
@@ -65,6 +66,7 @@ async def warningBot(member: discord.Member, channel, cause):
                         value=f'`{channel.guild.name}`',
                         inline=False)
     embedUser.add_field(name='**Cause:**', value=f'`{cause}`', inline=False)
+
     await member.send(embed=embedUser)  # Отправляем Embed пользователю
     if dataManager.getViolation(member) >= warningLimit:
         handshake = await timeout_user(user_id=member.id,
@@ -118,17 +120,25 @@ async def memberStat(ctx, member):
 
 
 @bot.command(name='stat',
-             help='Server statistics - (Members, Online, Offline)',
-             brief='Shows server statistics')
-async def stat(ctx):
+             help='Shows server/member statistics - [!stat @name]',
+             brief='Shows server/member statistics')
+async def stat(ctx, arg: discord.Member = None):
     #if doesn't have right return
     if not HaveRights(ctx.message.author):
         return
+    print(type(arg))
+    if type(arg) is discord.Member:
+        embed = discord.Embed(color=amethystColor,
+                              title='Member statistics',
+                              description=f'')
+        embed.add_field(name="Violations", value=dataManager.getViolation(arg))
+        await ctx.reply(embed=embed)
+        return
+
     #удаляю сообщение пользователя
     #await bot.delete_message(ctx.message)
     #берем массив пользователей исключая ботов
     #membersArray = [x for x in ctx.guild.members if not x.bot]
-    await ctx.reply(str(ctx.message.author.status))
     embedStatVar = discord.Embed(title=f'Server statistics',
                                  color=amethystColor)
     membersCount = 0
@@ -333,14 +343,14 @@ async def warning(ctx, member: discord.Member, *arg):
     if not HaveRights(ctx.message.author):
         return
     cause = ' '.join(arg)  #соединяем оставшиеся аргументы
-    dataManager.addViolation(member)
+    await dataManager.addViolation(member, ctx.channel, cause)
     embed = discord.Embed(
         color=0xff9900,
         title=f'Warning {dataManager.getViolation(member)}/{warningLimit}'
     )  # Создание Embed'a
     #await ctx.message.author.send(f'**Server**: {ctx.message.guild.name}')
     #await ctx.message.author.send(f'**Cause**: {cause}')
-    await ctx.reply(embed=embed)  # Отправляем Embe
+    #await ctx.reply(embed=embed)  # Отправляем Embe
     embedUser = discord.Embed(
         color=0xff9900,
         title='Warning',
@@ -351,7 +361,7 @@ async def warning(ctx, member: discord.Member, *arg):
                         value=f'`{ctx.message.guild.name}`',
                         inline=False)
     embedUser.add_field(name='**Cause:**', value=f'`{cause}`', inline=False)
-    await member.send(embed=embedUser)  # Отправляем Embed пользователю
+    #await member.send(embed=embedUser)  # Отправляем Embed пользователю
 
 
 #custom commands start
@@ -368,14 +378,14 @@ async def checkCurse(msg):
         await dataManager.addViolation(msg.author, msg.channel,
                                        'Bad word usage')
 
+
     #для тестов бот будет говорить на сер  вер, после можно заменить, так легче дебажить систему
     #await msg.author.send(f"{msg.author.mention} you can't use these words here.")
-
-
 async def checkSpam(msg):
     filtered = ''.join(
-        filter((str(allLetters) + str(allLetters).upper()).__contains__,
-               msg.content))
+        filter(
+            (''.join(allLetters) + ''.join(allLetters).upper()).__contains__,
+            msg.content))
 
     countLettersAll = len(filtered)
     if countLettersAll == 0:
@@ -393,6 +403,11 @@ async def checkSpam(msg):
     async for message in msg.channel.history(limit=200):
         if message.author.id == msg.author.id:
             counterAll += 1
+    if percentUpper > 0.35 and len(msg.content) > 5:
+        await msg.channel.send(
+            f"{msg.author.mention} you can't use caps lock words here.")
+        await dataManager.addViolation(msg.author, msg.channel,
+                                       'Using caps lock')
 
 
 async def checkMessage(msg):

@@ -20,8 +20,8 @@ class dataManagment():
             db[f'violations{member.id}'] = db[f'violations{member.id}'] + 1
         else:  #иначе создаём ключ
             db[f'violations{member.id}'] = 1
-        if db[f'violations{member.id}'] >= self.warningLimit:
-            await self.callback(member, channel, cause)
+        #if db[f'violations{member.id}'] >= self.warningLimit:
+        await self.callback(member, channel, cause)
 
     #уменьшаем нарушения
     def substructViolation(self, member: discord.Member, count: int = 1):
