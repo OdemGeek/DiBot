@@ -1,6 +1,9 @@
 from levenshteinDistance import levenshteinDistance
 import sys
-
+#from profanity_filter import ProfanityFilter
+#from profanity_filter import AVAILABLE_ANALYSES
+import time
+import os
 
 class SpamChecker():
 
@@ -557,14 +560,42 @@ class SpamChecker():
     }
 
     invHash = {v: k for k, v in latCyrHash.items()}
-
+    initialized = False
+    normalWords = []
+    @staticmethod
+    def initialize():
+        # folder path
+        import os
+        dirName = os.path.dirname(os.path.abspath(__file__))
+        dir_path = dirName + '/Dictionaries'
+        
+        # list to store files
+        res = []
+        
+        # Iterate directory
+        for path in os.listdir(dir_path):
+            # check if current path is a file
+            if os.path.isfile(os.path.join(dir_path, path)):
+                res.append(path)
+        for fileName in res:
+            text_file = open('Dictionaries/' + fileName, "r")
+            lines = text_file.readlines()
+            SpamChecker.normalWords += [x.split('/')[0] for x in lines]
+  
     @staticmethod
     def CheckString(text: [str]) -> (int, int, float):
         distanceGlobal = sys.maxsize
         wordLength = sys.maxsize
         percents = 0.0
+
+        for word in text:
+            if word in SpamChecker.normalWords:
+                return 999, len(word), -1
+            
+        
         for badWord in SpamChecker.curseWords:
             for word in text:
+              
                 dist = levenshteinDistance.levenshteinDistanceDP(word, badWord)
 
                 if dist < distanceGlobal:
@@ -577,6 +608,23 @@ class SpamChecker():
 
     @staticmethod
     def GetPercentage(text: str) -> float:
+        if not SpamChecker.initialized:
+            SpamChecker.initialize()
+            SpamChecker.initialized = True
+        start_time = time.time()
+        
+        #print(', '.join(sorted(analysis.value for analysis in AVAILABLE_ANALYSES)))
+        # deep, morphological, multilingual
+        '''pf = ProfanityFilter()
+        pf.restore_profane_word_dictionaries()
+        if pf.is_clean(text):
+            print('Clean')
+            return 0
+        else:
+            print('Bad word detected')
+            return 1
+        
+        return 0'''
         #lower text to exclude case checking
         text = text.lower()
         #check default
@@ -608,4 +656,6 @@ class SpamChecker():
         #d3, l3 = SpamChecker.CheckString(wordsInLatText)
 
         print(f'{p1} | {d1} | {l1}')
+
+        print("--- %s ms ---" % ((time.time() - start_time) * 1000))
         return p1
