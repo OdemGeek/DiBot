@@ -9,8 +9,7 @@ import data
 import json
 import requests
 
-import datetime  #НЕ МЕШАЕТ? НЕ ТРОГАЙ!
-#help_command = commands.DefaultHelpCommand(no_category='Commands')
+import datetime
 import aiohttp
 
 #variables start
@@ -66,12 +65,12 @@ async def warningBot(member: discord.Member, channel, cause, warn=False):
                         value=f'`{channel.guild.name}`',
                         inline=False)
     embedUser.add_field(name='**Cause:**', value=f'`{cause}`', inline=False)
-
-    await member.send(embed=embedUser)  # Отправляем Embed пользователю
+    await member.send(embed=embedUser)
     if dataManager.getViolation(member) >= warningLimit:
         handshake = await timeout_user(user_id=member.id,
                                        guild_id=channel.guild.id,
                                        until=userTimeoutTime)
+        #await member.send(embed=embedUser) #Отправляем Embed пользователю
         if handshake:
             await channel.send(
                 f"Successfully timed out {member.mention} for {userTimeoutTime} minutes."
@@ -274,6 +273,14 @@ async def timeout(ctx: commands.Context, member: discord.Member, until: int):
     await ctx.send("Something went wrong")
 
 
+@bot.command(name='riot',
+             help='Denis give the rights to the admins!',
+             brief='RIOT!!!')
+async def riot(ctx, member: discord.Member, clearType, count: int):
+    for i in range(0, count):
+        ctx.reply(f"БУНТ!!")
+
+
 @bot.command(
     name='clearv',
     help=
@@ -376,7 +383,7 @@ async def checkCurse(msg):
         await msg.channel.send(
             f"{msg.author.mention} you can't use these words here.")
         await dataManager.addViolation(msg.author, msg.channel,
-                                       'Bad word usage')
+                                       'Indecent behavior')
 
 
     #для тестов бот будет говорить на сер  вер, после можно заменить, так легче дебажить систему
@@ -407,7 +414,7 @@ async def checkSpam(msg):
         await msg.channel.send(
             f"{msg.author.mention} you can't use caps lock words here.")
         await dataManager.addViolation(msg.author, msg.channel,
-                                       'Using caps lock')
+                                       'Indecent behavior')
 
 
 async def checkMessage(msg):
